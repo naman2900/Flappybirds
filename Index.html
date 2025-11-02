@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Flappy Bird - Deeksha Edition</title>
+<style>
+  body {margin:0;overflow:hidden;background:black;}
+  canvas {
+    display:block;margin:auto;
+    background:url('https://i.postimg.cc/VNcrtZwH/55a299d6e568392dc747d60894b11911.jpg');
+    background-size:cover;
+  }
+  #start, #gameover, #videoOverlay {
+    position:fixed;inset:0;
+    background:rgba(0,0,0,0.85);
+    display:flex;flex-direction:column;
+    justify-content:center;align-items:center;
+    color:white;font-family:sans-serif;text-align:center;
+  }
+  #start button, #gameover button {
+    padding:12px 25px;margin:10px;border:none;
+    border-radius:10px;background:gold;color:black;
+    font-size:18px;cursor:pointer;
+  }
+  #start button:hover, #gameover button:hover {background:orange;}
+  #gameover, #videoOverlay {display:none;}
+  video {
+    width:90%;max-width:360px;border-radius:12px;box-shadow:0 0 20px #000;
+  }
+</style>
+</head>
+<body>
+<canvas id="game" width="400" height="600"></canvas>
+
+<!-- Start Screen -->
+<div id="start">
+  <h1>🎮 Flappy Bird</h1>
+  <p>Tap “Start Game” to begin (sound starts manually)</p>
+  <button id="play">Start Game</button>
+</div>
+
+<!-- Game Over Screen -->
+<div id="gameover">
+  <h1>💀 Game Over</h1>
+  <p id="finalScore">Score: 0</p>
+  <button id="restart">Restart</button>
+  <button id="exit">Exit</button>
+</div>
+
+<!-- Video Overlay -->
+<div id="videoOverlay">
+  <video id="loseVideo" playsinline>
+    <source src="https://files.catbox.moe/60ln6h.mp4" type="video/mp4">
+  </video>
+</div>
+
+<!-- Background Music -->
+<audio id="bgm" loop preload="auto">
+  <source src="https://files.catbox.moe/qgfj3s.mp3" type="audio/mpeg">
+</audio>
+
+<script>
+const c = document.getElementById("game"), ctx = c.getContext("2d");
+const startScreen = document.getElementById("start");
+const gameOverScreen = document.getElementById("gameover");
+const videoOverlay = document.getElementById("videoOverlay");
+const loseVideo = document.getElementById("loseVideo");
+const playBtn = document.getElementById("play");
+const restartBtn = document.getElementById("restart");
+const exitBtn = document.getElementById("exit");
+const finalScore = document.getElementById("finalScore");
+const bgm = document.getElementById("bgm");
+
+const birdImg = new Image(); birdImg.src = "https://i.postimg.cc/sX5RhKjz/26f8099ce9c07ae55d7017bdf166f522.jpg";
+const pipeImg = new Image(); pipeImg.src = "https://i.postimg.cc/L8tSh2T5/3f7f7d6272e34e9138b7614998f963d1.jpg";
+
+let bird = { x:60, y:150, w:34, h:26, vel:0, grav:0.6, lift:-9, canJump:true };
+let pipes = [], score = 0, frame = 0, playing = false, over = false;
+
+function reset() {
+  bird.y = 150; bird.vel = 0; bird.canJump = true;
+  pipes = []; score = 0; frame = 0; over = false;
+  gameOverScreen.style.display = "none";
+  videoOverlay.style.display = "none";
+  playing = true;
+  bgm.currentTime = 0;
+  bgm.play().catch(e=>console.log("Music play blocked:", e));
+}
+
+function showLoseVideo(callback){
+  videoOverlay.style.display = "flex";
+  loseVideo.currentTime = 0;
+  loseVideo.play().catch(e=>console.log("Video blocked:", e));
+  loseVideo.onended = () => {
+    videoOverlay.style.display = "none";
+    if(callback) callback();
+  };
+}
+
+function gameOver() {
+  over = true; playing = false;
+  bgm.pause();
+  finalScore.textContent = "Score: " + score;
+  showLoseVideo(() => {  // show video first, then game over screen
+    gameOverScreen.style.display = "flex";
+  });
+}
+
+function update() {
+  if (!playing || over) return;
+  bird.vel += bird.grav;
+  bird.y += bird.vel;
+  if (bird.vel > 0) bird.canJump = true;
+
+  if (frame % 90 === 0) {
+    let top = Math.random() * 200 + 50, gap = 130;
+    pipes.push({x:c.width, w:60, top:top, gap:gap});
+  }
+
+  pipes.forEach(p => {
+    p.x -= 2;
+    if (bird.x + bird.w > p.x && bird.x < p.x + p.w &&
+       (bird.y < p.top || bird.y + bird.h > p.top + p.gap)) {
+      gameOver();
+    }
+  });
+
+  pipes = pipes.filter(p => p.x + p.w > 0);
+  if (bird.y > c.height || bird.y < 0) gameOver();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, c.width, c.height);
+  pipes.forEach(p => {
+    ctx.drawImage(pipeImg, p.x, 0, p.w, p.top); 
+    ctx.drawImage(pipeImg, p.x, p.top + p.gap, p.w, c.height - (p.top + p.gap));
+  });
+  ctx.drawImage(birdImg, bird.x, bird.y, bird.w, bird.h);
+  ctx.fillStyle = "white"; ctx.font = "24px Arial";
+  ctx.fillText("Score: " + score, 10, 30);
+}
+
+function loop() {
+  update();
+  draw();
+  frame++;
+  requestAnimationFrame(loop);
+}
+loop();
+
+function jump() {
+  if (playing && !over && bird.canJump) {
+    bird.vel = bird.lift;
+    bird.canJump = false;
+  }
+}
+
+document.addEventListener("keydown", e => { if (e.code === "Space") jump(); });
+c.addEventListener("mousedown", jump);
+c.addEventListener("touchstart", jump);
+
+playBtn.addEventListener("click", async () => {
+  startScreen.style.display = "none";
+  reset();
+  try { await bgm.play(); } catch(e) { console.log("Audio blocked:", e); }
+});
+
+restartBtn.addEventListener("click", () => reset());
+exitBtn.addEventListener("click", () => {
+  bgm.pause();
+  gameOverScreen.style.display = "none";
+  startScreen.style.display = "flex";
+  playing = false; over = false;
+});
+</script>
+</body>
+</html>
